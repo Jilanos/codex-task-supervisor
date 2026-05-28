@@ -4,8 +4,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+import os
 import sqlite3
 import sys
+
+
+def _configure_logging(level: str | None) -> None:
+    raw = level or os.environ.get("CODEX_TASK_SUPERVISOR_LOG", "WARNING")
+    logging.basicConfig(
+        level=getattr(logging, raw.upper(), logging.WARNING),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        stream=sys.stderr,
+    )
 
 from .config import ConfigError, load_config
 from .database import Database
@@ -17,6 +28,7 @@ from .validation import ValidationError
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="codex-task-supervisor")
     parser.add_argument("--config", default=None)
+    parser.add_argument("--log-level", default=None)
     parser.add_argument("--planner-command", default=None)
     parser.add_argument("--harness-command", default=None)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -30,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     execute = sub.add_parser("execute-plan")
     execute.add_argument("--plan-id", required=True)
+    execute.add_argument("--resume", action="store_true", help="skip expected_runs that are already passed/blocked/failed")
 
     score = sub.add_parser("score-plan")
     score.add_argument("--plan-id", required=True)
@@ -54,6 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    _configure_logging(args.log_level)
     try:
         config = load_config(args.config)
         if args.planner_command:
@@ -72,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ingested {plan_id}")
             return 0
         if args.command == "execute-plan":
-            execute_plan(args.plan_id, config)
+            execute_plan(args.plan_id, config, resume=args.resume)
             print(f"executed {args.plan_id}")
             return 0
         if args.command == "score-plan":

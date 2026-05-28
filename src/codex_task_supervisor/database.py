@@ -175,7 +175,7 @@ class Database:
 
     def insert_run_report(self, plan_id: str, expected: sqlite3.Row, report: dict[str, Any], report_path: str | None) -> None:
         created_at = report.get("created_at") or _now()
-        run_id = report.get("run_id", expected["expected_run_id"])
+        run_id = report.get("run_id") or report.get("task_id") or expected["expected_run_id"]
         conn = self.connect()
         try:
             conn.execute(

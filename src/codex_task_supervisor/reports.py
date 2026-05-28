@@ -26,9 +26,10 @@ def build_summary(db: Database, plan_id: str) -> dict[str, Any]:
     if plan is None:
         raise ValueError(f"plan not found: {plan_id}")
     rows = db.fetch_all(
-        """SELECT r.*, s.quality_score, s.cost_score, s.duration_score, s.efficiency_score, s.final_score,
+        """SELECT r.*, t.task_type, s.quality_score, s.cost_score, s.duration_score, s.efficiency_score, s.final_score,
                   tu.total_tokens
            FROM runs r
+           JOIN tasks t ON t.plan_id = r.plan_id AND t.task_id = r.task_id
            LEFT JOIN scores s ON s.run_id = r.run_id
            LEFT JOIN token_usage tu ON tu.run_id = r.run_id
            WHERE r.plan_id = ?
@@ -38,6 +39,7 @@ def build_summary(db: Database, plan_id: str) -> dict[str, Any]:
     run_dicts = [dict(row) for row in rows]
     best_by_task = _best_by(run_dicts, "task_id")
     best_modes = _best_modes(run_dicts)
+    leaderboard_by_task_type = _leaderboard_by_task_type(run_dicts)
     total_tokens = sum(row["total_tokens"] or 0 for row in rows)
     total_duration = sum(row["duration_seconds"] or 0 for row in rows)
     final_scores = [row["final_score"] for row in rows if row["final_score"] is not None]
@@ -53,6 +55,7 @@ def build_summary(db: Database, plan_id: str) -> dict[str, Any]:
         "failed_count": sum(1 for row in rows if row["status"] == "failed"),
         "best_runs_by_task": best_by_task,
         "best_modes_overall": best_modes,
+        "leaderboard_by_task_type": leaderboard_by_task_type,
         "total_tokens": total_tokens,
         "total_duration_seconds": total_duration,
         "average_final_score": average(final_scores),
@@ -91,6 +94,19 @@ def render_markdown(summary: dict[str, Any]) -> str:
     lines.extend(["", "## Best Model/Reasoning Combinations", ""])
     for mode in summary["best_modes_overall"]:
         lines.append(f"- {mode['mode_id']}: average score {_fmt(mode['average_final_score'])}, average tokens {_fmt(mode['average_tokens'])}")
+    leaderboard = summary.get("leaderboard_by_task_type", {})
+    if leaderboard:
+        lines.extend(["", "## Best Mode Per Task Type", ""])
+        for task_type, rows in sorted(leaderboard.items()):
+            if not rows:
+                continue
+            top = rows[0]
+            lines.append(
+                f"- {task_type}: {top['mode_id']} "
+                f"(score {_fmt(top['average_final_score'])}, "
+                f"tokens {_fmt(top['average_tokens'])}, "
+                f"pass {top['passed']}/{top['runs']})"
+            )
     lines.extend(["", "## Failed Or Blocked Runs", ""])
     if failed:
         for run in failed:
@@ -141,6 +157,43 @@ def _best_by(runs: list[dict[str, Any]], key: str) -> dict[str, dict[str, Any]]:
         if current is None or (run.get("final_score") or -1) > (current.get("final_score") or -1):
             result[run[key]] = run
     return result
+
+
+def _leaderboard_by_task_type(runs: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    by_type: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for run in runs:
+        task_type = run.get("task_type") or "unknown"
+        mode_id = run.get("mode_id") or "unknown"
+        by_type.setdefault(task_type, {}).setdefault(mode_id, []).append(run)
+    leaderboard: dict[str, list[dict[str, Any]]] = {}
+    for task_type, modes in by_type.items():
+        rows: list[dict[str, Any]] = []
+        for mode_id, items in modes.items():
+            tokens = [item["total_tokens"] for item in items if item.get("total_tokens") is not None]
+            durations = [item["duration_seconds"] for item in items if item.get("duration_seconds") is not None]
+            scores = [item["final_score"] for item in items if item.get("final_score") is not None]
+            passed = sum(1 for item in items if item.get("status") == "passed")
+            rows.append({
+                "mode_id": mode_id,
+                "model": items[0].get("model"),
+                "reasoning_effort": items[0].get("reasoning_effort"),
+                "runs": len(items),
+                "passed": passed,
+                "pass_rate": passed / len(items),
+                "average_final_score": average(scores),
+                "average_tokens": average(tokens),
+                "average_duration_seconds": average(durations),
+            })
+        leaderboard[task_type] = sorted(
+            rows,
+            key=lambda r: (
+                r["average_final_score"] or 0.0,
+                -(r["average_tokens"] or 0),
+                -(r["average_duration_seconds"] or 0),
+            ),
+            reverse=True,
+        )
+    return leaderboard
 
 
 def _best_modes(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:

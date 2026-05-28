@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from .database import Database
@@ -12,6 +13,8 @@ from .planner_client import run_planner
 from .reports import generate_reports
 from .scoring import score_plan
 from .validation import validate_command, validate_file, validate_plan_dir
+
+logger = logging.getLogger(__name__)
 
 
 class PlannerFailure(RuntimeError):
@@ -57,19 +60,30 @@ def ingest_plan(plan_dir: str | Path, config: SupervisorConfig) -> str:
     return db.ingest_plan(directory)
 
 
-def execute_plan(plan_id: str, config: SupervisorConfig) -> None:
+def execute_plan(plan_id: str, config: SupervisorConfig, resume: bool = False) -> None:
     db = Database(config.database_path)
     db.initialize()
     expected_runs = db.fetch_expected_runs(plan_id)
-    for expected in expected_runs:
+    total = len(expected_runs)
+    skipped = 0
+    executed = 0
+    for index, expected in enumerate(expected_runs, start=1):
+        if resume and expected["status"] in {"passed", "blocked", "failed"}:
+            logger.info("[%d/%d] skip already-executed %s (status=%s)", index, total, expected["expected_run_id"], expected["status"])
+            skipped += 1
+            continue
+        logger.info("[%d/%d] running %s", index, total, expected["expected_run_id"])
         result = run_harness(config.harness_command, expected["task_file"])
         if result.report is None:
+            logger.warning("[%d/%d] missing harness report: %s", index, total, result.error)
             report = _failed_report(expected, result.error or "harness report missing", result.command_result.duration_seconds, result.command_result.exit_code)
         else:
             report = result.report
         db.insert_run_report(plan_id, expected, report, result.report_path)
+        executed += 1
         if config.stop_on_first_failure and report.get("status") != "passed":
             raise HarnessFailure(f"harness run failed: {expected['expected_run_id']}")
+    logger.info("execute_plan done: executed=%d skipped=%d total=%d", executed, skipped, total)
     db.update_plan_status(plan_id, "executed")
 
 

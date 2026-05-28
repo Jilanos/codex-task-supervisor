@@ -13,7 +13,7 @@ class ValidationError(ValueError):
     """Raised when user input or generated artifacts are invalid."""
 
 
-REQUIRED_REPORT_FIELDS = {"run_id", "status", "duration_seconds", "checks"}
+REQUIRED_REPORT_FIELDS = {"status", "duration_seconds", "checks", "model", "reasoning_effort"}
 
 
 def validate_command(command: str, label: str) -> None:
@@ -68,7 +68,13 @@ def validate_report_shape(report: dict[str, Any]) -> None:
     missing = REQUIRED_REPORT_FIELDS - set(report)
     if missing:
         raise ValidationError(f"harness report missing required fields: {', '.join(sorted(missing))}")
+    if "run_id" not in report and "task_id" not in report:
+        raise ValidationError("harness report must include run_id or task_id")
     if report["status"] not in {"passed", "failed", "blocked"}:
         raise ValidationError(f"invalid harness report status: {report['status']}")
     if not isinstance(report["checks"], list):
         raise ValidationError("harness report checks must be a list")
+    if not isinstance(report["model"], str) or not report["model"]:
+        raise ValidationError("harness report model must be a non-empty string")
+    if not isinstance(report["reasoning_effort"], str) or not report["reasoning_effort"]:
+        raise ValidationError("harness report reasoning_effort must be a non-empty string")
