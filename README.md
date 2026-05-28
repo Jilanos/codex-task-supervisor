@@ -94,6 +94,12 @@ Run the complete benchmark pipeline:
 codex-task-supervisor run-benchmark --request-file examples/requests/simple_request.md --matrix examples/matrices/default.json
 ```
 
+Run the one-mode smoke benchmark:
+
+```bash
+codex-task-supervisor run-benchmark --request-file examples/requests/smoke_request.md --matrix examples/matrices/smoke.json
+```
+
 Ingest an existing plan:
 
 ```bash

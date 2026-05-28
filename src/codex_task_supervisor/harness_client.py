@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 import time
 from pathlib import Path
@@ -13,7 +14,7 @@ from .validation import validate_report_shape
 
 def run_harness(harness_command: str, task_file: str | Path) -> HarnessResult:
     task_path = Path(task_file)
-    command = harness_command.split() + ["run", "--task-file", str(task_path)]
+    command = shlex.split(harness_command) + ["run", "--task-file", str(task_path)]
     start = time.monotonic()
     proc = subprocess.run(command, capture_output=True, text=True)
     duration = time.monotonic() - start

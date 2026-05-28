@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import shlex
 import shutil
 from pathlib import Path
 from typing import Any
@@ -15,13 +17,20 @@ REQUIRED_REPORT_FIELDS = {"run_id", "status", "duration_seconds", "checks"}
 
 
 def validate_command(command: str, label: str) -> None:
-    first = command.split()[0]
+    try:
+        first = shlex.split(command)[0]
+    except (IndexError, ValueError) as exc:
+        raise ValidationError(f"{label} is empty or invalid: {command}") from exc
     path = Path(first)
+    if path.exists() and path.is_file() and os.access(path, os.X_OK):
+        return
+    if shutil.which(first) is not None:
+        return
     if path.exists():
         if not path.is_file():
             raise ValidationError(f"{label} is not a file: {first}")
-        return
-    if shutil.which(first) is None:
+        raise ValidationError(f"{label} is not executable: {first}")
+    else:
         raise ValidationError(f"{label} not found on PATH: {first}")
 
 

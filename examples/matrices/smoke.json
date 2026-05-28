@@ -1,0 +1,8 @@
+{
+  "models": ["gpt-5.3-codex"],
+  "reasoning_efforts": ["low"],
+  "default_checks": ["python -m compileall src tests", "python -m unittest"],
+  "workspace_root": ".codex-task-planner/generated_workspaces",
+  "output_root": ".codex-task-planner/generated_artifacts",
+  "timeout_seconds": 600
+}

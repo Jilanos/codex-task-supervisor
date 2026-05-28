@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 import time
 from pathlib import Path
@@ -10,7 +11,7 @@ from .models import CommandResult, PlannerResult
 
 
 def run_planner(planner_command: str, request_file: str | Path, matrix_file: str | Path) -> PlannerResult:
-    command = planner_command.split() + ["create", "--request-file", str(request_file), "--matrix", str(matrix_file)]
+    command = shlex.split(planner_command) + ["create", "--request-file", str(request_file), "--matrix", str(matrix_file)]
     start = time.monotonic()
     proc = subprocess.run(command, capture_output=True, text=True)
     duration = time.monotonic() - start
