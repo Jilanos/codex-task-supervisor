@@ -1,0 +1,13 @@
+{
+  "planner_command": "codex-task-planner",
+  "harness_command": "codex-task-harness",
+  "database_path": ".codex-task-supervisor/state/supervisor.sqlite3",
+  "reports_root": ".codex-task-supervisor/reports",
+  "stop_on_first_failure": false,
+  "max_parallel_runs": 1,
+  "scoring": {
+    "quality_weight": 0.6,
+    "cost_weight": 0.25,
+    "duration_weight": 0.15
+  }
+}
