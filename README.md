@@ -140,6 +140,38 @@ codex-task-supervisor export --plan-id PLAN_ID --format jsonl
 
 Supported export formats are `jsonl`, `json`, and `csv`.
 
+Recommend a model for a new task based on historical runs:
+
+```bash
+codex-task-supervisor recommend --task-file path/to/harness_task.json
+```
+
+Or pass a raw features JSON string:
+
+```bash
+codex-task-supervisor recommend --features '{"task_type":"implementation","domains":["cli","validation"],"complexity_estimate":"medium"}'
+```
+
+Control the number of nearest neighbours considered:
+
+```bash
+codex-task-supervisor recommend --task-file task.json --top-k 10
+```
+
+The command queries the local SQLite database, computes Jaccard similarity on task feature vectors, and returns the model and reasoning effort that performed best on the most similar historical tasks:
+
+```json
+{
+  "recommended_model": "gpt-5.3-codex",
+  "reasoning_effort": "medium",
+  "confidence": 0.82,
+  "based_on": 5,
+  "top_matches": [...]
+}
+```
+
+The recommendation improves as the corpus grows. A single benchmark run produces enough data for basic routing. The `features` field is written automatically by `codex-task-planner` v0.2 and later.
+
 ## Configuration
 
 Default local state:
@@ -282,14 +314,13 @@ python -m unittest
 
 ## Limitations
 
-Version 0.1 executes runs sequentially. It assumes the planner and harness CLIs honor their file contracts. It scores only deterministic report fields and does not inspect code diffs, estimate real cost, retry failures, or select execution modes dynamically.
+Execution is sequential. The supervisor assumes the planner and harness CLIs honor their file contracts. Scoring uses only deterministic report fields and does not inspect code diffs or estimate real monetary cost from token prices. Model recommendation accuracy grows with corpus size: a single benchmark run provides a first signal but is not statistically robust.
 
 ## Future Roadmap
 
-- v0.2: parallel execution
-- v0.3: retry and escalation policy
-- v0.4: richer scoring with diff analysis
-- v0.5: cost estimation using real token prices
-- v0.6: optimized execution mode using the cheapest sufficient model
-- v0.7: intelligent router trained from historical runs
-- v0.8: integration into a larger Orchestia-style orchestration system
+- v0.3: parallel execution
+- v0.4: retry and escalation policy
+- v0.5: richer scoring with diff analysis
+- v0.6: cost estimation using real token prices
+- v0.7: router trained on larger historical corpus with weighted recency
+- v0.8: integration into a larger orchestration system
