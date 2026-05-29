@@ -4,12 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codex-task-supervisor"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local benchmark supervisor for planner and harness generated task runs."
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{ name = "codex-task-supervisor contributors" }]
 license = { text = "MIT" }
+keywords = ["codex", "benchmark", "supervisor", "scoring", "routing"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
 dependencies = []
 
 [project.scripts]

@@ -29,6 +29,7 @@ SCHEMA = [
         prompt TEXT NOT NULL,
         local_context_json TEXT NOT NULL,
         acceptance_criteria_json TEXT NOT NULL,
+        features_json TEXT NOT NULL DEFAULT '{}',
         PRIMARY KEY (plan_id, task_id)
     )""",
     """CREATE TABLE IF NOT EXISTS modes (
@@ -118,6 +119,11 @@ class Database:
         try:
             for statement in SCHEMA:
                 conn.execute(statement)
+            # Migrate pre-features databases gracefully
+            try:
+                conn.execute("ALTER TABLE tasks ADD COLUMN features_json TEXT NOT NULL DEFAULT '{}'")
+            except sqlite3.OperationalError:
+                pass  # column already exists
             conn.commit()
         finally:
             conn.close()
@@ -145,7 +151,7 @@ class Database:
             )
             for task in tasks:
                 conn.execute(
-                    "INSERT OR REPLACE INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT OR REPLACE INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         task["task_id"],
                         plan["plan_id"],
@@ -156,6 +162,7 @@ class Database:
                         task["prompt"],
                         json.dumps(task.get("local_context", {}), sort_keys=True),
                         json.dumps(task.get("acceptance_criteria", []), sort_keys=True),
+                        json.dumps(task.get("features", {}), sort_keys=True),
                     ),
                 )
             for mode in modes:
@@ -273,6 +280,41 @@ class Database:
             return [dict(row) for row in conn.execute(query, params)]
         finally:
             conn.close()
+
+    def fetch_reference_corpus(self) -> list[dict[str, Any]]:
+        """Return one entry per (task, model, reasoning_effort) with the best final_score.
+
+        Used by the similarity router to find reference tasks for model recommendation.
+        Only includes tasks that have at least one scored run.
+        """
+        query = """
+            SELECT
+                t.task_id,
+                t.plan_id,
+                t.features_json,
+                r.model,
+                r.reasoning_effort,
+                MAX(s.final_score) AS final_score
+            FROM tasks t
+            JOIN runs r ON r.task_id = t.task_id AND r.plan_id = t.plan_id
+            JOIN scores s ON s.run_id = r.run_id
+            WHERE s.final_score IS NOT NULL
+            GROUP BY t.task_id, t.plan_id, r.model, r.reasoning_effort
+            ORDER BY t.plan_id, t.task_id, r.model, r.reasoning_effort
+        """
+        rows = self.fetch_all(query)
+        result = []
+        for row in rows:
+            features = json.loads(row.get("features_json") or "{}")
+            result.append({
+                "task_id": row["task_id"],
+                "plan_id": row["plan_id"],
+                "features": features,
+                "model": row["model"],
+                "reasoning_effort": row["reasoning_effort"],
+                "final_score": row["final_score"],
+            })
+        return result
 
     def update_plan_status(self, plan_id: str, status: str) -> None:
         conn = self.connect()

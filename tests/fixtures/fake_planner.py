@@ -96,6 +96,21 @@ def task(task_id: str, title: str, task_type: str, dependencies: list[str]) -> d
         "local_context": {"scope": title},
         "acceptance_criteria": [f"{title} is complete."],
         "checks": ["python -m unittest"],
+        "features": {
+            "task_type": task_type,
+            "domains": ["cli", "validation"] if task_type == "implementation" else ["tests"],
+            "has_cli": task_type == "implementation",
+            "has_validation": task_type == "implementation",
+            "has_tests": task_type == "test",
+            "has_io": task_type == "implementation",
+            "has_state": False,
+            "complexity_estimate": "low",
+            "domain_count": 2 if task_type == "implementation" else 1,
+            "dependency_count": len(dependencies),
+            "acceptance_criteria_count": 1,
+            "check_count": 1,
+            "prompt_word_count": len(title.split()),
+        },
     }
 
 

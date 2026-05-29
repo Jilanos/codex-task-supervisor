@@ -37,6 +37,48 @@ class CliTests(unittest.TestCase):
             os.chdir(old)
             ws.cleanup()
 
+    def test_recommend_returns_json_with_required_keys(self):
+        ws = Workspace()
+        old = os.getcwd()
+        os.chdir(ws.path)
+        try:
+            import json as _json
+            config = ws.config()
+            common = ["--planner-command", config.planner_command, "--harness-command", config.harness_command]
+            # Run benchmark so the corpus has scored entries
+            main(common + ["run-benchmark", "--request-file", str(ws.request), "--matrix", str(ws.matrix)])
+            main(common + ["score-plan", "--plan-id", "PLAN-FAKE-001"])
+            features = _json.dumps({
+                "task_type": "implementation",
+                "domains": ["cli", "validation"],
+                "complexity_estimate": "low",
+            })
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                code = main(common + ["recommend", "--features", features])
+            self.assertEqual(code, 0)
+            result = _json.loads(buf.getvalue())
+            for key in ("recommended_model", "reasoning_effort", "confidence", "based_on", "top_matches"):
+                self.assertIn(key, result)
+        finally:
+            os.chdir(old)
+            ws.cleanup()
+
+    def test_recommend_fails_without_corpus(self):
+        ws = Workspace()
+        old = os.getcwd()
+        os.chdir(ws.path)
+        try:
+            import json as _json
+            config = ws.config()
+            common = ["--planner-command", config.planner_command, "--harness-command", config.harness_command]
+            features = _json.dumps({"task_type": "implementation", "domains": []})
+            code = main(common + ["recommend", "--features", features])
+            self.assertEqual(code, 1)
+        finally:
+            os.chdir(old)
+            ws.cleanup()
+
 
 if __name__ == "__main__":
     unittest.main()

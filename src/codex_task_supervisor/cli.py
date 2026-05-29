@@ -21,6 +21,7 @@ def _configure_logging(level: str | None) -> None:
 from .config import ConfigError, load_config
 from .database import Database
 from .export import export_plan
+from .similarity import recommend_model
 from .supervisor import HarnessFailure, PlannerFailure, ReportFailure, execute_plan, generate_existing_report, ingest_plan, run_benchmark, score_existing_plan
 from .validation import ValidationError
 
@@ -61,6 +62,13 @@ def build_parser() -> argparse.ArgumentParser:
     export = sub.add_parser("export")
     export.add_argument("--plan-id", required=True)
     export.add_argument("--format", choices=["jsonl", "json", "csv"], default="jsonl")
+
+    recommend = sub.add_parser("recommend")
+    recommend_source = recommend.add_mutually_exclusive_group(required=True)
+    recommend_source.add_argument("--task-file", help="Path to a harness task JSON file (must contain a features dict)")
+    recommend_source.add_argument("--features", help="Raw features JSON string")
+    recommend.add_argument("--top-k", type=int, default=5, help="Number of nearest neighbours to consider (default: 5)")
+
     return parser
 
 
@@ -115,6 +123,26 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "export":
             print(export_plan(db, args.plan_id, args.format), end="")
+            return 0
+        if args.command == "recommend":
+            if args.task_file:
+                import pathlib
+                raw = json.loads(pathlib.Path(args.task_file).read_text(encoding="utf-8"))
+                features = raw.get("features")
+                if not features:
+                    print("error: task file has no 'features' field — re-generate the plan with a recent codex-task-planner", file=sys.stderr)
+                    return 1
+            else:
+                features = json.loads(args.features)
+            corpus = db.fetch_reference_corpus()
+            if not corpus:
+                print("error: no scored runs in the database — run a benchmark first", file=sys.stderr)
+                return 1
+            result = recommend_model(features, corpus, top_k=args.top_k)
+            if result is None:
+                print("error: could not produce a recommendation", file=sys.stderr)
+                return 1
+            print(json.dumps(result, indent=2))
             return 0
     except (ConfigError, ValidationError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
