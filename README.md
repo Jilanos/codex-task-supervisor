@@ -1,6 +1,35 @@
 # codex-task-supervisor
 
-`codex-task-supervisor` is a standalone local benchmark supervisor for planner and harness based coding experiments.
+A local supervisor that runs a request through an external planner and harness, stores the results in SQLite, scores them and writes benchmark reports.
+
+## Problem and audience
+
+Choosing a model and reasoning effort for coding tasks is guesswork without data. This tool is for people who want to compare Codex model settings on the same tasks and keep the history locally. It does not call any LLM itself. It drives a planner CLI and a harness CLI ([codex-task-harness](https://github.com/Jilanos/codex-task-harness)) through commands and files.
+
+## Quick start
+
+Requires Python 3.10 or later.
+
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e .
+python -m unittest
+```
+
+Run the full pipeline with the fake planner and harness from the tests, no Codex needed:
+
+```bash
+codex-task-supervisor \
+  --planner-command "python3 tests/fixtures/fake_planner.py" \
+  --harness-command "python3 tests/fixtures/fake_harness.py" \
+  run-benchmark --request-file examples/requests/smoke_request.md --matrix examples/matrices/smoke.json
+```
+
+Reports land in `.codex-task-supervisor/reports/PLAN-FAKE-001/` (`summary.json`, `summary.md`).
+
+## Tech stack and status
+
+Python, standard library only, SQLite, `unittest`, GitHub Actions. Version 0.2.0, early and personal. Sequential execution only.
 
 It orchestrates this pipeline:
 
